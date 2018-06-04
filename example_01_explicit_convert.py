@@ -48,58 +48,69 @@ def get_trt_engine(model):
   print('success')
   return engine
 
-def summary(model):
-  model.summary()
-  nb_layers = len(model.layers)
-  for i in range(0, nb_layers):
-    print('***debug***, layer name ', i, model.layers[i].name)
-  for i in range(0, nb_layers):
-    print('***debug***, input name ', i, model.layers[i].input.name)
-  for i in range(0, nb_layers):
-    print('***debug***, output name', i, model.layers[i].output.name)
 
-def main(argv):
-  num_classes = 10
-  # input image dimensions
-  img_rows, img_cols = 28, 28
-
+def get_dataset(num_classes, img_h, img_w):
   # the data, split between train and test sets
   (x_train, y_train), (x_test, y_test) = mnist.load_data()
 
   if K.image_data_format() == 'channels_first':
-      x_train = x_train.reshape(x_train.shape[0], 1, img_rows, img_cols)
-      x_test = x_test.reshape(x_test.shape[0], 1, img_rows, img_cols)
-      input_shape = (1, img_rows, img_cols)
+      x_test = x_test.reshape(x_test.shape[0], 1, img_h, img_w)
+      input_shape = (1, img_h, img_w)
   else:
-      x_train = x_train.reshape(x_train.shape[0], img_rows, img_cols, 1)
-      x_test = x_test.reshape(x_test.shape[0], img_rows, img_cols, 1)
-      input_shape = (img_rows, img_cols, 1)
+      x_test = x_test.reshape(x_test.shape[0], img_h, img_w, 1)
+      input_shape = (img_h, img_w, 1)
 
-  x_train = x_train.astype('float32')
-  x_test  = x_test.astype('float32')
-  x_train /= 255
-  x_test  /= 255
-  print('x_train shape:', x_train.shape)
-  print(x_train.shape[0], 'train samples')
-  print(x_test.shape[0],  'test samples')
+  x_test = x_test.astype('float32')
+  x_test /= 255
 
   # convert class vectors to binary class matrices
-  y_train = keras.utils.to_categorical(y_train, num_classes)
   y_test  = keras.utils.to_categorical(y_test,  num_classes)
+  return x_test, y_test
+
+
+def show_number(img, img_h, img_w):
+  res = img.reshape((img_h, img_w))
+  for y in range(0, img_h):
+    str=''
+    for x in range(0, img_w):
+      data = res[y][x]
+      if (data > 0.5) : str += '@'
+      else : str += ' '
+    print(str)
+
+
+def verify(pre, ans):
+  ans = keras.backend.get_value(keras.backend.argmax(ans, axis=-1))
+  pre = keras.backend.get_value(keras.backend.argmax(pre, axis=-1))
+  passed = 0
+  num_test = ans.shape[0]
+  for i in range(0, num_test):
+    if (pre[i] == ans[i]) : passed = passed + 1
+
+  if (passed / num_test > 0.99) : print('PASSED')
+  else : print('FAILURE', passed)
+
+  print('first inference result:', pre[0])
+
+
+def main(argv):
+  num_classes = 10
+  # input image dimensions
+  img_h, img_w = 28, 28
 
   model = load_model("my_model.h5")
-  summary(model)
-
+  model.summary()
+  
+  x_test, y_test = get_dataset(num_classes, img_h, img_w)
   score = model.evaluate(x_test, y_test, verbose=0)
   # make sure load right model
   print('Test loss:', score[0])
   print('Test accuracy:', score[1])
 
-  predict = model.predict(x_test)
-  # print predict to compared TRT result
-  print('***debug***, x_test.shape', x_test.shape)
-  print('***debug***, predict[0]', predict[0])
-  
+  show_number(x_test[0], img_h, img_w)
+  y_predict = model.predict(x_test)
+  verify(y_predict, y_test)
+
   trt_engine = get_trt_engine(model)
 
 if __name__ == "__main__":

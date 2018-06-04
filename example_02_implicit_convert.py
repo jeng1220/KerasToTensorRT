@@ -84,37 +84,35 @@ def get_tf_graph(model):
   return frozen_graph, 'image_tensor', output_names
 
 
-################################################################################
-# execute a graphdef
-################################################################################
-def run_graphdef(graph_def, input_str, output_str, input_data):
-  #set_trace()
+def get_tf_sess(graph_def, input_str, output_str):
   # load TF-TRT graph into memory and extract input & output nodes
   g = tf.Graph()
   with g.as_default():
     inp, out = tf.import_graph_def(
         graph_def=graph_def, return_elements=[input_str, output_str[0]])
-    #print('***debug***, inp', type(inp))
-    #print('***debug***, out', type(out))
-    #print('***debug***, inp', inp)
-    #print('***debug***, out', out)
     inp = inp.outputs[0]
     out = out.outputs[0]
-
-  #print('***debug***, inp', type(inp))
-  #print('***debug***, out', type(out))
-  #print('***debug***, inp', inp)
-  #print('***debug***, out', out)
-
-
   # allow_growth and restrict Tensorflow to claim all GPU memory
   # currently TensorRT engine uses independent memory allocation outside of TF
   config=tf.ConfigProto(gpu_options=
              tf.GPUOptions(per_process_gpu_memory_fraction=0.5,
              allow_growth=True))
   # we can now import trt_graph into Tensorflow and execute it. If given target
-  with tf.Session(graph=g, config=config) as sess:
-    val = sess.run(out, {inp: input_data})
+  sess = tf.Session(graph=g, config=config)
+  return sess, inp, out
+
+
+def run_tf_sess(sess, inp, out, input_data):
+  val = sess.run(out, {inp: input_data})
+  return val
+
+
+################################################################################
+# execute a graphdef
+################################################################################
+def run_graphdef(graph_def, input_str, output_str, input_data):
+  sess, inp, out = get_tf_sess(graph_def, input_str, output_str)
+  val = run_tf_sess(sess, inp, out, input_data)
   return val
 
 
@@ -174,10 +172,20 @@ def main(argv):
   verify(y_predict_tf, y_test)
 
   num_test = x_test.shape[0]
-  trt_graph = convert_tftrt_fp(tf_graph, num_test, 'FP32', output_name[0]) 
+  batch_size = 1000
+  trt_graph = convert_tftrt_fp(tf_graph, batch_size, 'FP32', output_name[0]) 
+  sess, inp, out = get_tf_sess(trt_graph, input_name, output_name)
+  y_predict_trt = np.zeros(y_test.shape, y_test.dtype)
+
   t0 = time.time()
-  y_predict_trt = run_graphdef(trt_graph, input_name, output_name, x_test)
+
+  for i in range(0, num_test, batch_size):
+    x_part = x_test[i : i + batch_size, : ]
+    y_part = run_tf_sess(sess, inp, out, x_part)
+    y_predict_trt[i : i + batch_size, : ] = y_part
+
   t1 = time.time()
+  
   print('TensorRT time', t1 - t0)
   verify(y_predict_trt, y_test)
 

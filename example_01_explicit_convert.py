@@ -206,9 +206,11 @@ def main(argv):
   assert(trt_engine)
   trt_summary(trt_engine)
   y_predict_trt = infer(trt_engine, x_test[0], num_test)
+  print('first inference result:', np.argmax(y_predict_trt))
 
-  print(y_predict[0])
-  print(y_predict_trt, np.argmax(y_predict_trt))
+  print('\ncompare:')
+  print('Keras\n',    y_predict[0])
+  print('TensorRT\n', y_predict_trt)
 
 if __name__ == "__main__":
   main(sys.argv)

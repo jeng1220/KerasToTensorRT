@@ -7,6 +7,7 @@ from keras.layers import Conv2D, MaxPooling2D
 from keras.models import load_model
 from keras import backend as K
 
+
 import tensorflow as tf
 import uff
 import tensorrt as trt
@@ -15,37 +16,6 @@ import pycuda.driver as cuda
 import numpy as np
 import pdb
 import sys
-
-def get_trt_engine(model, batch_size=1):
-  with K.get_session() as sess:
-    #image_batch_t = tf.placeholder(tf.float32, shape=(None, 1, 28, 28), name='image_tensor')
-    image_batch_t = tf.placeholder(tf.float32, shape=(None, 28, 28, 1), name='image_tensor')
-    K.set_learning_phase(0)
-    conf_t = model(image_batch_t)
-    output_names = [conf_t.name[:-2]]
-    #print('***debug***, output_names', output_names)
-    graphdef = sess.graph.as_graph_def()      
-    frozen_graph = tf.graph_util.convert_variables_to_constants(sess, graphdef, output_names)
-    frozen_graph = tf.graph_util.remove_training_nodes(frozen_graph)
-
-  uff_model = uff.from_tensorflow(frozen_graph, output_names)
-  G_LOGGER = trt.infer.ConsoleLogger(trt.infer.LogSeverity.ERROR)
-
-  parser = uffparser.create_uff_parser()
-  #input_shape = (28, 28, 1)
-  input_shape = (1, 28, 28)
-  #parser.register_input("placeholder", input_shape, 1)
-  parser.register_input("image_tensor", input_shape, 0)
-  parser.register_output(output_names[0])
-  engine = trt.utils.uff_to_trt_engine(G_LOGGER,
-    uff_model,
-    parser,
-    batch_size,
-    1 << 10)
-
-  parser.destroy()
-  print('success')
-  return engine
 
 
 def get_dataset(num_classes, img_h, img_w):
@@ -79,18 +49,52 @@ def show_number(img, img_h, img_w):
     print(str)
 
 
+def get_trt_engine(model, batch_size=1):
+  with K.get_session() as sess:
+    #image_batch_t = tf.placeholder(tf.float32, shape=(None, 1, 28, 28), name='image_tensor')
+    image_batch_t = tf.placeholder(tf.float32, shape=(None, 28, 28, 1), name='image_tensor')
+    K.set_learning_phase(0)
+    conf_t = model(image_batch_t)
+    output_names = [conf_t.name[:-2]]
+    #print('***debug***, output_names', output_names)
+    graphdef = sess.graph.as_graph_def()      
+    frozen_graph = tf.graph_util.convert_variables_to_constants(sess, graphdef, output_names)
+    frozen_graph = tf.graph_util.remove_training_nodes(frozen_graph)
+
+  uff_model = uff.from_tensorflow(frozen_graph, output_names)
+  G_LOGGER = trt.infer.ConsoleLogger(trt.infer.LogSeverity.ERROR)
+
+  parser = uffparser.create_uff_parser()
+  #input_shape = (28, 28, 1)
+  input_shape = (1, 28, 28)
+  #parser.register_input("placeholder", input_shape, 1)
+  parser.register_input("image_tensor", input_shape, 0)
+  parser.register_output(output_names[0])
+  engine = trt.utils.uff_to_trt_engine(G_LOGGER,
+    uff_model,
+    parser,
+    batch_size,
+    1 << 25)
+
+  parser.destroy()
+  print('success')
+  return engine
+
+
 def verify(pre, ans):
-  ans = keras.backend.get_value(keras.backend.argmax(ans, axis=-1))
-  pre = keras.backend.get_value(keras.backend.argmax(pre, axis=-1))
   passed = 0
   num_test = ans.shape[0]
+
   for i in range(0, num_test):
-    if (pre[i] == ans[i]) : passed = passed + 1
+    a = np.argmax(ans[i])
+    p = np.argmax(pre[i])
+    if (p == a) : passed = passed + 1
 
   if (passed / num_test > 0.99) : print('PASSED')
   else : print('FAILURE', passed)
 
-  print('first inference result:', pre[0])
+  p = np.argmax(pre[0])
+  print('first inference result:', p, '\n\n')
 
 
 def trt_summary(engine):
@@ -196,10 +200,12 @@ def main(argv):
   y_predict = model.predict(x_test)
   verify(y_predict, y_test)
 
-  trt_engine = get_trt_engine(model, 1)
+  #num_test = 1325
+  num_test = 1
+  trt_engine = get_trt_engine(model, num_test)
   assert(trt_engine)
   trt_summary(trt_engine)
-  y_predict_trt = infer(trt_engine, x_test[0], 1)
+  y_predict_trt = infer(trt_engine, x_test[0], num_test)
 
   print(y_predict[0])
   print(y_predict_trt, np.argmax(y_predict_trt))

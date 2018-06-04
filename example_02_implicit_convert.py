@@ -14,8 +14,7 @@ from keras.layers import Conv2D, MaxPooling2D
 from keras.models import load_model
 from keras import backend as K
 
-import tensorrt as trt
-import uff
+
 import tensorflow as tf
 from tensorflow.contrib import tensorrt as tftrt
 from tensorrt.parsers import uffparser
@@ -23,6 +22,7 @@ from tensorrt.parsers import uffparser
 import numpy as np
 from pdb import set_trace
 import sys
+import time
 
 def get_dataset(num_classes, img_h, img_w):
   # the data, split between train and test sets
@@ -159,21 +159,27 @@ def main(argv):
   print('Test accuracy:', score[1])
 
   show_number(x_test[0], img_h, img_w)
+  t0 = time.time()
   y_predict = model.predict(x_test)
+  t1 = time.time()
+  print('Keras time', t1 - t0)
   verify(y_predict, y_test)
 
   tf_graph, input_name, output_name = get_tf_graph(model)
   #print('***debug***, tf_graph', type(tf_graph), tf_graph)
+  t0 = time.time()
   y_predict_tf = run_graphdef(tf_graph, input_name, output_name, x_test)
+  t1 = time.time()
+  print('Tensorflow time', t1 - t0)
   verify(y_predict_tf, y_test)
 
-  trt_graph = convert_tftrt_fp(tf_graph, 1, 'FP32', output_name[0]) 
-  #print('***debug***, trt_graph', type(trt_graph), trt_graph)
-  print('***debug***, after convert_tftrt_fp')
-  x_1_test = x_test[0]
-  x_1_test = x_1_test.reshape((1, 28, 28, 1))
-  y_predict_trt = run_graphdef(trt_graph, input_name, output_name, x_1_test)
-  print('***debug***, y_predict_trt', np.argmax(y_predict_trt))
+  num_test = x_test.shape[0]
+  trt_graph = convert_tftrt_fp(tf_graph, num_test, 'FP32', output_name[0]) 
+  t0 = time.time()
+  y_predict_trt = run_graphdef(trt_graph, input_name, output_name, x_test)
+  t1 = time.time()
+  print('TensorRT time', t1 - t0)
+  verify(y_predict_trt, y_test)
 
 
 if __name__ == "__main__":

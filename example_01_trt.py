@@ -1,4 +1,3 @@
-from __future__ import print_function
 import keras
 from keras.models import load_model
 from keras import backend as K
@@ -9,7 +8,6 @@ import tensorrt as trt
 from tensorrt.parsers import uffparser
 import pycuda.driver as cuda
 import numpy as np
-import sys
 import time
 
 import utils.ascii as helper
@@ -81,7 +79,7 @@ class trt_engine():
 
     return y
 
-def main(argv):
+def main():
   # load pre-trained model
   K.set_image_data_format('channels_first')
   model = load_model("nchw_model.h5")
@@ -112,4 +110,4 @@ def main(argv):
   engine.save('nchw_engine.bin')
 
 if __name__ == "__main__":
-  main(sys.argv)
+  main()

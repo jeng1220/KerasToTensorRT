@@ -1,4 +1,3 @@
-from __future__ import print_function
 import keras
 from keras.models import load_model
 from keras import backend as K
@@ -83,7 +82,7 @@ class tftrt_engine():
     return y
 
 
-def main(argv):
+def main():
   # load pre-trained model
   model = load_model("nhwc_model.h5")
   model.summary()
@@ -121,4 +120,4 @@ def main(argv):
 
 
 if __name__ == "__main__":
-  main(sys.argv)
+  main()

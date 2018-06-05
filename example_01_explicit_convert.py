@@ -51,8 +51,8 @@ def show_number(img, img_h, img_w):
 
 def get_trt_engine(model, batch_size=1):
   with K.get_session() as sess:
-    #image_batch_t = tf.placeholder(tf.float32, shape=(None, 1, 28, 28), name='image_tensor')
-    image_batch_t = tf.placeholder(tf.float32, shape=(None, 28, 28, 1), name='image_tensor')
+    image_batch_t = tf.placeholder(tf.float32, shape=(None, 1, 28, 28), name='image_tensor')
+    #image_batch_t = tf.placeholder(tf.float32, shape=(None, 28, 28, 1), name='image_tensor')
     K.set_learning_phase(0)
     conf_t = model(image_batch_t)
     output_names = [conf_t.name[:-2]]
@@ -187,6 +187,7 @@ def main(argv):
   # input image dimensions
   img_h, img_w = 28, 28
 
+  K.set_image_data_format('channels_first')
   model = load_model("my_model.h5")
   model.summary()
   

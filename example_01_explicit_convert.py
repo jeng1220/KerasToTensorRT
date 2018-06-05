@@ -93,21 +93,21 @@ def main(argv):
   img_w = x_test.shape[3]
   helper.print_ascii(x_test[0], img_h, img_w)
 
-  # use Keras to do inference
+  # use Keras to infer
   t0 = time.time()
-  y_predict = model.predict(x_test)
+  y_keras = model.predict(x_test)
   t1 = time.time()
   print('Keras time', t1 - t0)
-  data.verify(y_predict, y_test)
+  data.verify(y_keras, y_test)
 
-  # use TensorRT to do inference
+  # use TensorRT to infer
   engine = trt_engine(model, 1000)
 
   t0 = time.time()
-  y_predict_trt = engine.infer(x_test)
+  y_trt = engine.infer(x_test)
   t1 = time.time()
   print('TensorRT time', t1 - t0)
-  data.verify(y_predict_trt, y_test)
+  data.verify(y_trt, y_test)
 
   engine.save('nchw_engine.bin')
 

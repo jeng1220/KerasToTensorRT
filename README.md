@@ -1,7 +1,7 @@
 # Keras to TensorRT Examples #
 This repo shows how to run Keras model on TensorRT
 
-## Requirment ##
+## Requirement ##
 * Python 3
 * Pycuda
 * TensorRT 4.0

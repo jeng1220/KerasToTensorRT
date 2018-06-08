@@ -10,6 +10,7 @@ import tensorflow as tf
 from tensorflow.contrib import tensorrt as tftrt
 
 import utils.ascii as helper
+import copy
 import numpy as np
 import time
 from enum import Enum
@@ -179,8 +180,9 @@ class TftrtEngine(TfEngine):
       precision_mode=precision,
       minimum_segment_size=2)
 
-    graph.frozen = tftrt_graph
-    super(TftrtEngine, self).__init__(graph)
+    opt_graph = copy.deepcopy(graph)
+    opt_graph.frozen = tftrt_graph
+    super(TftrtEngine, self).__init__(opt_graph)
     self.batch_size = batch_size
 
   def infer(self, x0, x1):

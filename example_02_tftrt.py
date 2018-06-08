@@ -127,7 +127,7 @@ def main():
   t0 = time.time() 
   y_tftrt = tftrt_engine.infer(x_test)
   t1 = time.time()
-  print('TFTRT16 time', t1 - t0)
+  print('TFTRT_FP16 time', t1 - t0)
   verify(y_tftrt, y_keras)
 
 if __name__ == "__main__":

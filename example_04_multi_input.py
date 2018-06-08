@@ -35,15 +35,15 @@ def preprocess_data(x, y, num_classes):
   t0 = y[0 : num_tests]
   t1 = y[num_tests : 2 * num_tests]
   
-  y0 = keras.utils.to_categorical(t0 * 10 + t1, num_classes)
-  y1 = keras.utils.to_categorical(t0 *  1 + t1, 20)
+  y0 = keras.utils.to_categorical(t0 * 10 + t1, num_classes[0])
+  y1 = keras.utils.to_categorical(t0 *  1 + t1, num_classes[1])
 
   return Dataset(x0, x1, y0, y1)
 
 def get_data(img_format):
   (x_train, y_train), (x_test, y_test) = mnist.load_data()
   img_h, img_w = 28, 28
-  num_classes = 100
+  num_classes = [100, 20]
 
   if (img_format == ImageForamtType.NCHW):
     K.set_image_data_format('channels_first')
@@ -67,8 +67,8 @@ def get_data(img_format):
   return num_classes, img_shape, train, test
 
 def custom_model(img_shape, num_classes):
-  y_shape0 = (num_classes, )
-  y_shape1 = (20, )
+  y0_shape = (num_classes[0], )
+  y1_shape = (num_classes[1], )
 
   input_a = Input(shape=img_shape, name='input_a')
   x0 = Conv2D(32, kernel_size=(3, 3), 
@@ -80,24 +80,25 @@ def custom_model(img_shape, num_classes):
     activation='relu')(input_b)
   x1 = MaxPooling2D(pool_size=(2, 2))(x1)
 
-  x2 = Concatenate(axis=-1)([x0, x1])
+  if (img_shape[0] == 1) :
+    x2 = Concatenate(axis=1)([x0, x1])
+  else:
+    x2 = Concatenate(axis=3)([x0, x1])
   x2 = Conv2D(32, kernel_size=(3, 3), 
     activation='relu')(x2)
   x2 = MaxPooling2D(pool_size=(2, 2))(x2)
 
-  x3 = Conv2D(64, kernel_size=(3, 3), 
+  x3 = Conv2D(32, kernel_size=(3, 3), 
     activation='relu')(x2)
   x3 = MaxPooling2D(pool_size=(2, 2))(x3)
-  x3 = Conv2D(128, kernel_size=(3, 3), 
-    activation='relu')(x3)
-  x3 = MaxPooling2D(pool_size=(2, 2))(x3)
-  x3 = Conv2D(256, kernel_size=(3, 3), 
-    activation='relu')(x3)
   x3 = Flatten()(x3)
-  output_b = Dense(*y_shape1, activation='softmax', name='output_b')(x3)
+  output_a = Dense(*y0_shape, activation='softmax', name='output_b')(x3)
 
-  x2 = Flatten()(x2)
-  output_a = Dense(*y_shape0, activation='softmax', name='output_a')(x2)  
+  x4 = Conv2D(32, kernel_size=(3, 3), 
+    activation='relu')(x2)
+  x4 = MaxPooling2D(pool_size=(2, 2))(x4)
+  x4 = Flatten()(x4)
+  output_b = Dense(*y1_shape, activation='softmax', name='output_a')(x4)  
 
   model = Model(inputs=[input_a, input_b], outputs=[output_a, output_b])
   model.compile(loss=keras.losses.categorical_crossentropy,
@@ -184,9 +185,8 @@ class TftrtEngine(TfEngine):
 
   def infer(self, x0, x1):
     num_tests = x0.shape[0]
-    num_classes = 100
-    y0 = np.empty((num_tests, num_classes), np.float32)
-    y1 = np.empty((num_tests, 20), np.float32)
+    y0 = np.empty((num_tests, self.y_tensors[0].shape[1]), np.float32)
+    y1 = np.empty((num_tests, self.y_tensors[1].shape[1]), np.float32)
     batch_size = self.batch_size
 
     for i in range(0, num_tests, batch_size):
@@ -253,8 +253,8 @@ def main():
                     default='0',
                     help='image format, 0) NCHW, 1) NHWC, default NCHW')
   (options, args) = parser.parse_args()
-
-  example(options.format)
+  print(options)
+  example(ImageForamtType(options.format))
 
 if __name__ == '__main__':
   main()

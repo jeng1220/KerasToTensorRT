@@ -111,20 +111,20 @@ def get_keras_model(num_classes, img_shape, train, test):
 class FrozenGraph(object):
   def __init__(self, model, shape):
     shape = (None, shape[0], shape[1], shape[2])
-    src_name0 = 'image_tensor_x0'
-    src_name1 = 'image_tensor_x1'
+    x_name0 = 'image_tensor_x0'
+    x_name1 = 'image_tensor_x1'
     with K.get_session() as sess:
-        x0_tensor = tf.placeholder(tf.float32, shape, src_name0)
-        x1_tensor = tf.placeholder(tf.float32, shape, src_name1)
+        x0_tensor = tf.placeholder(tf.float32, shape, x_name0)
+        x1_tensor = tf.placeholder(tf.float32, shape, x_name1)
         K.set_learning_phase(0)
-        conf_t = model([x0_tensor, x1_tensor])
-        dst_name = [conf_t.name[:-2]]
+        y_tensor = model([x0_tensor, x1_tensor])
+        y_name = [y_tensor.name[:-2]]
         graph = sess.graph.as_graph_def()
-        graph = tf.graph_util.convert_variables_to_constants(sess, graph, dst_name)
+        graph = tf.graph_util.convert_variables_to_constants(sess, graph, y_name)
         graph = tf.graph_util.remove_training_nodes(graph)
 
-    self.src_name = [src_name0, src_name1]
-    self.dst_name = dst_name
+    self.x_name = [x_name0, x_name1]
+    self.y_name = y_name
     self.frozen = graph  
 
 class TfEngine(object):
@@ -132,7 +132,7 @@ class TfEngine(object):
     g = tf.Graph()
     with g.as_default():
       x0_op, x1_op, y_op = tf.import_graph_def(
-          graph_def=graph.frozen, return_elements=[graph.src_name[0], graph.src_name[1], graph.dst_name[0]])
+          graph_def=graph.frozen, return_elements=[graph.x_name[0], graph.x_name[1], graph.y_name[0]])
       self.x0_tensor = x0_op.outputs[0]
       self.x1_tensor = x1_op.outputs[0]
       self.y_tensor  = y_op.outputs[0]
@@ -152,7 +152,7 @@ class TftrtEngine(TfEngine):
   def __init__(self, graph, batch_size, precision):
     tftrt_graph = tftrt.create_inference_graph(
       graph.frozen,
-      outputs=graph.dst_name,
+      outputs=graph.y_name,
       max_batch_size=batch_size,
       max_workspace_size_bytes=1 << 25,
       precision_mode=precision,
@@ -176,7 +176,7 @@ class TftrtEngine(TfEngine):
       y[i : i + batch_size] = y_part
     return y
 
-def verify(ans, result):
+def verify(result, ans):
   num_tests = ans.shape[0]
   error = 0
   for i in range(0, num_tests):

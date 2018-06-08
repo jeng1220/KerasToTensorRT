@@ -4,8 +4,8 @@ This repo shows how to run Keras model on TensorRT
 ## Requirement ##
 * Python 3
 * Pycuda
-* TensorRT 4.0
-* Tensorflow 1.7 with TensorRT integration
+* TensorRT 3.0.4
+* [Tensorflow 1.7 with TensorRT integration](https://devblogs.nvidia.com/tensorrt-integration-speeds-tensorflow-inference/)
 * Keras
 
 Please make sure that Tensorflow has enabled TensorRT support before run examples

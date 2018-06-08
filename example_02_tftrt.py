@@ -5,13 +5,13 @@ from keras import backend as K
 import tensorflow as tf
 from tensorflow.contrib import tensorrt as tftrt
 
+import copy
 import numpy as np
 import sys
 import time
 
 import utils.ascii as helper
 import utils.dataset as data
-
 
 class FrozenGraph(object):
   def __init__(self, model, shape):
@@ -28,7 +28,7 @@ class FrozenGraph(object):
 
     self.x_name = [x_name]
     self.y_name = [y_name]
-    self.frozen = graph0  
+    self.frozen = graph1
 
 class TfEngine(object):
   def __init__(self, graph):
@@ -60,8 +60,9 @@ class TftrtEngine(TfEngine):
       precision_mode=precision,
       minimum_segment_size=2)
 
-    graph.frozen = tftrt_graph
-    super(TftrtEngine, self).__init__(graph)
+    opt_graph = copy.deepcopy(graph)
+    opt_graph.frozen = tftrt_graph
+    super(TftrtEngine, self).__init__(opt_graph)
     self.batch_size = batch_size
 
   def infer(self, x):
@@ -120,6 +121,13 @@ def main():
   y_tftrt = tftrt_engine.infer(x_test)
   t1 = time.time()
   print('TFTRT time', t1 - t0)
+  verify(y_tftrt, y_keras)
+
+  tftrt_engine = TftrtEngine(frozen_graph, batch_size, 'FP16')
+  t0 = time.time() 
+  y_tftrt = tftrt_engine.infer(x_test)
+  t1 = time.time()
+  print('TFTRT16 time', t1 - t0)
   verify(y_tftrt, y_keras)
 
 if __name__ == "__main__":

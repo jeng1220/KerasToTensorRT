@@ -30,7 +30,12 @@ This approach supports both NCHW and NHWC format because Tensorflow can handles 
 $ python3 example_02_tftrt.py
 ```
 
-[example_03_resnet50.py](example_03_resnet50.py) shows how to run Keras Applications ResNet50 on Tensorflow 1.7 with TensorRT 
+[example_03_resnet50.py](/example_03_resnet50.py) shows how to run Keras Applications ResNet50 on Tensorflow 1.7 with TensorRT
 ```shell
 $ python3 example_03_resnet50.py
+```
+
+[example_04_multi_input.py](/example_04_multi_input.py) shows how to run a multi-input Keras model on Tensorflow 1.7 with TensorRT
+```shell
+$ python3 example_04_multi_input.py
 ```

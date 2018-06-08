@@ -8,96 +8,107 @@ import tensorflow as tf
 from tensorflow.contrib import tensorrt as tftrt
 import numpy as np
 
-def get_tf_graph(model):
-  with K.get_session() as sess:
-      image_batch_t = tf.placeholder(tf.float32, shape=(None, 224, 224, 3), name='image_tensor')
-      K.set_learning_phase(0)
-      conf_t = model(image_batch_t)
-      dst_strs = [conf_t.name[:-2]]
-      graphdef = sess.graph.as_graph_def()
-      frozen_graph = tf.graph_util.convert_variables_to_constants(sess, graphdef, dst_strs)
-      frozen_graph = tf.graph_util.remove_training_nodes(frozen_graph)
-  return frozen_graph, 'image_tensor', dst_strs
+class FrozenGraph(object):
+  def __init__(self, model, shape):
+    shape = (None, shape[0], shape[1], shape[2])
+    x_name = 'image_tensor_x'
+    with K.get_session() as sess:
+        x_tensor = tf.placeholder(tf.float32, shape, x_name)
+        K.set_learning_phase(0)
+        y_tensor = model(x_tensor)
+        y_name = y_tensor.name[:-2]
+        graph = sess.graph.as_graph_def()
+        graph0 = tf.graph_util.convert_variables_to_constants(sess, graph, [y_name])
+        graph1 = tf.graph_util.remove_training_nodes(graph0)
 
-def run_graphdef(graph_def, input_str, output_str, input_data):
-  # load TF-TRT graph into memory and extract input & output nodes
-  g = tf.Graph()
-  with g.as_default():
-    inp, out = tf.import_graph_def(
-        graph_def=graph_def, return_elements=[input_str, output_str[0]])
-    inp = inp.outputs[0]
-    out = out.outputs[0]
-  # allow_growth and restrict Tensorflow to claim all GPU memory
-  # currently TensorRT engine uses independent memory allocation outside of TF
-  config=tf.ConfigProto(gpu_options=
-             tf.GPUOptions(per_process_gpu_memory_fraction=0.5,
-             allow_growth=True))
-  # we can now import trt_graph into Tensorflow and execute it. If given target
-  with tf.Session(graph=g, config=config) as sess:
-    val = sess.run(out, {inp: input_data})
-  return val
+    self.x_name = [x_name]
+    self.y_name = [y_name]
+    self.frozen = graph0  
 
-# conversion example
-def get_tftrt_graph(orig_graph, batch_size, precision, output_str):
-  # convert native Tensorflow graphdef into a mixed TF-TRT graph
-  trt_graph = tftrt.create_inference_graph(
-      input_graph_def=orig_graph,       # native Tensorflow graphdef
-      outputs=[output_str],             # list of names for output node
-      max_batch_size=batch_size,        # maximum/optimum batchsize for TF-TRT
-                                        # mixed graphdef
-      max_workspace_size_bytes=1 << 25, # maximum workspace (in MB) for each 
-                                        # TRT engine to allocate
-      precision_mode=precision,         # TRT Engine precision
-                                        # "FP32","FP16" or "INT8"
-      minimum_segment_size=2            # minimum number of nodes in an engine,
-                                        # this parameter allows the converter to
-                                        # skip subgraph with total node number
-                                        # less than the threshold
-  )
+class TfEngine(object):
+  def __init__(self, graph):
+    g = tf.Graph()
+    with g.as_default():
+      x_op, y_op = tf.import_graph_def(
+          graph_def=graph.frozen, return_elements=graph.x_name + graph.y_name)
+      self.x_tensor = x_op.outputs[0]
+      self.y_tensor = y_op.outputs[0]
 
-  # we can now import trt_graph into Tensorflow and execute it. If given target
-  # precision_mode as 'FP32' or 'FP16'.
-  if precision=='FP16' or precision=='FP32':
-    return trt_graph
+    config = tf.ConfigProto(gpu_options=
+      tf.GPUOptions(per_process_gpu_memory_fraction=0.5,
+      allow_growth=True))
 
-def verify(a, b):
-  num_test = a.shape[0]
-  assert(num_test == b.shape[0])
-  passed = 0
+    self.sess = tf.Session(graph=g, config=config)
 
-  for i in range(0, num_test):
-    a2 = np.argmax(a[i])
-    b2 = np.argmax(b[i])
-    if (a2 == b2): passed += 1
-  
-  if (passed == num_test): print('PASSED\n')
-  else: print('FAILURE\n')
+  def infer(self, x):
+    y = self.sess.run(self.y_tensor,
+      feed_dict={self.x_tensor: x})
+    return y
+
+class TftrtEngine(TfEngine):
+  def __init__(self, graph, batch_size, precision):
+    tftrt_graph = tftrt.create_inference_graph(
+      graph.frozen,
+      outputs=graph.y_name,
+      max_batch_size=batch_size,
+      max_workspace_size_bytes=1 << 30,
+      precision_mode=precision,
+      minimum_segment_size=2)
+
+    graph.frozen = tftrt_graph
+    super(TftrtEngine, self).__init__(graph)
+    self.batch_size = batch_size
+
+  def infer(self, x):
+    num_tests = x.shape[0]
+    y = np.empty((num_tests, self.y_tensor.shape[1]), np.float32)
+    batch_size = self.batch_size
+
+    for i in range(0, num_tests, batch_size):
+      x_part = x[i : i + batch_size]
+      y_part = self.sess.run(self.y_tensor,
+        feed_dict={self.x_tensor: x_part})
+      y[i : i + batch_size] = y_part
+    return y
+
+def verify(result, ans):
+  num_tests = ans.shape[0]
+  error = 0
+  for i in range(0, num_tests):
+    a = np.argmax(ans[i])
+    r = np.argmax(result[i])
+    if (a != r) : error += 1
+
+  if (error == 0) : print('PASSED')
+  else            : print('FAILURE')
 
 def main():
   model = ResNet50(weights='imagenet')
   batch_size = 128
-  x_test = np.random.random_sample((batch_size, 224, 224, 3))
-  src_str = 'image_tensor'
+  img_shape = (224, 224, 3)
+  x_test = np.random.random_sample((batch_size,
+    img_shape[0], img_shape[1], img_shape[2]))
 
   t0 = time.time()
   y_keras = model.predict(x_test)
   t1 = time.time()
   print('Keras time', t1 - t0)
 
-  tf_graph, src_str, dst_str = get_tf_graph(model)
+  frozen_graph = FrozenGraph(model, img_shape)
 
+  tf_engine = TfEngine(frozen_graph)
   t0 = time.time() 
-  y_tf = run_graphdef(tf_graph, src_str, dst_str, x_test) 
+  y_tf = tf_engine.infer(x_test)
   t1 = time.time()
   print('Tensorflow time', t1 - t0)
-  verify(y_keras, y_tf)
+  verify(y_tf, y_keras)
 
-  trt_graph = get_tftrt_graph(tf_graph, batch_size, 'FP32', dst_str[0])
-  t0 = time.time()
-  y_tftrt = run_graphdef(trt_graph, src_str, dst_str, x_test) 
+  tftrt_engine = TftrtEngine(frozen_graph, batch_size, 'FP32')
+  t0 = time.time() 
+  y_tftrt = tftrt_engine.infer(x_test)
   t1 = time.time()
-  print('TensorRT time', t1 - t0)
-  verify(y_tf, y_tftrt)
+  print('TFTRT time', t1 - t0)
+  verify(y_tftrt, y_keras)
 
 if __name__ == "__main__":
   main()

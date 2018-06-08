@@ -21,22 +21,24 @@ class ImageForamtType(Enum):
   NHWC = '1'
 
 class Dataset():
-  def __init__(self, x0, x1, y):
+  def __init__(self, x0, x1, y0, y1):
     self.x0 = x0
     self.x1 = x1
-    self.y  = y
+    self.y0 = y0
+    self.y1 = y1
 
 def preprocess_data(x, y, num_classes):
   num_tests = int(x.shape[0] / 2)
   x0 = x[0 : num_tests]
   x1 = x[num_tests : 2 * num_tests]
 
-  y0 = y[0 : num_tests]
-  y1 = y[num_tests : 2 * num_tests]  
-  y = y0 * 10 + y1
-  y = keras.utils.to_categorical(y, num_classes)
+  t0 = y[0 : num_tests]
+  t1 = y[num_tests : 2 * num_tests]
+  
+  y0 = keras.utils.to_categorical(t0 * 10 + t1, num_classes)
+  y1 = keras.utils.to_categorical(t0 *  1 + t1, 20)
 
-  return Dataset(x0, x1, y)
+  return Dataset(x0, x1, y0, y1)
 
 def get_data(img_format):
   (x_train, y_train), (x_test, y_test) = mnist.load_data()
@@ -65,7 +67,8 @@ def get_data(img_format):
   return num_classes, img_shape, train, test
 
 def custom_model(img_shape, num_classes):
-  output_shape = (num_classes, )
+  y_shape0 = (num_classes, )
+  y_shape1 = (20, )
 
   input_a = Input(shape=img_shape, name='input_a')
   x0 = Conv2D(32, kernel_size=(3, 3), 
@@ -82,9 +85,10 @@ def custom_model(img_shape, num_classes):
     activation='relu')(x2)
   x2 = MaxPooling2D(pool_size=(2, 2))(x2)
   x2 = Flatten()(x2)
-  output = Dense(*output_shape, activation='softmax',name='output')(x2)
+  output_a = Dense(*y_shape0, activation='softmax', name='output_a')(x2)
+  output_b = Dense(*y_shape1, activation='softmax', name='output_b')(x2)
 
-  model = Model(inputs=[input_a, input_b], outputs=output)
+  model = Model(inputs=[input_a, input_b], outputs=[output_a, output_b])
   model.compile(loss=keras.losses.categorical_crossentropy,
                 optimizer=keras.optimizers.Adadelta(),
                 metrics=['accuracy'])
@@ -94,16 +98,19 @@ def custom_model(img_shape, num_classes):
 def get_keras_model(num_classes, img_shape, train, test):
   model = custom_model(img_shape, num_classes)
   batch_size = 1000
-  epochs = 4
+  epochs = 1
   
   x_train = [train.x0, train.x1]
   x_test = [test.x0, test.x1]
 
-  model.fit(x_train, train.y,
+  y_train = [train.y0, train.y1]
+  y_test = [test.y0, test.y1]
+
+  model.fit(x_train, y_train,
     batch_size, epochs,
     verbose=1,
-    validation_data=(x_test, test.y))
-  score = model.evaluate(x_test, test.y, verbose=1)
+    validation_data=(x_test, y_test))
+  score = model.evaluate(x_test, y_test, verbose=1)
   print('Test loss:', score[0])
   print('Test accuracy:', score[1])
   return model
@@ -111,19 +118,21 @@ def get_keras_model(num_classes, img_shape, train, test):
 class FrozenGraph(object):
   def __init__(self, model, shape):
     shape = (None, shape[0], shape[1], shape[2])
-    x_name0 = 'image_tensor_x0'
-    x_name1 = 'image_tensor_x1'
+    x0_name = 'image_tensor_x0'
+    x1_name = 'image_tensor_x1'
     with K.get_session() as sess:
-        x0_tensor = tf.placeholder(tf.float32, shape, x_name0)
-        x1_tensor = tf.placeholder(tf.float32, shape, x_name1)
+        x0_tensor = tf.placeholder(tf.float32, shape, x0_name)
+        x1_tensor = tf.placeholder(tf.float32, shape, x1_name)
         K.set_learning_phase(0)
         y_tensor = model([x0_tensor, x1_tensor])
-        y_name = [y_tensor.name[:-2]]
+        y0_name = y_tensor[0].name[:-2]
+        y1_name = y_tensor[1].name[:-2]
+        y_name = [y0_name, y1_name]
         graph = sess.graph.as_graph_def()
         graph = tf.graph_util.convert_variables_to_constants(sess, graph, y_name)
         graph = tf.graph_util.remove_training_nodes(graph)
 
-    self.x_name = [x_name0, x_name1]
+    self.x_name = [x0_name, x1_name]
     self.y_name = y_name
     self.frozen = graph  
 
@@ -131,11 +140,11 @@ class TfEngine(object):
   def __init__(self, graph):
     g = tf.Graph()
     with g.as_default():
-      x0_op, x1_op, y_op = tf.import_graph_def(
-          graph_def=graph.frozen, return_elements=[graph.x_name[0], graph.x_name[1], graph.y_name[0]])
+      x0_op, x1_op, y0_op, y1_op = tf.import_graph_def(
+          graph_def=graph.frozen, return_elements=graph.x_name + graph.y_name)
       self.x0_tensor = x0_op.outputs[0]
       self.x1_tensor = x1_op.outputs[0]
-      self.y_tensor  = y_op.outputs[0]
+      self.y_tensors = [y0_op.outputs[0], y1_op.outputs[0]]
 
     config = tf.ConfigProto(gpu_options=
       tf.GPUOptions(per_process_gpu_memory_fraction=0.5,
@@ -144,9 +153,9 @@ class TfEngine(object):
     self.sess = tf.Session(graph=g, config=config)
 
   def infer(self, x0, x1):
-    y = self.sess.run(self.y_tensor,
+    y0, y1 = self.sess.run(self.y_tensors,
       feed_dict={self.x0_tensor: x0, self.x1_tensor: x1})
-    return y
+    return y0, y1
 
 class TftrtEngine(TfEngine):
   def __init__(self, graph, batch_size, precision):
@@ -165,16 +174,18 @@ class TftrtEngine(TfEngine):
   def infer(self, x0, x1):
     num_tests = x0.shape[0]
     num_classes = 100
-    y = np.empty((num_tests, num_classes), np.float32)
+    y0 = np.empty((num_tests, num_classes), np.float32)
+    y1 = np.empty((num_tests, 20), np.float32)
     batch_size = self.batch_size
 
     for i in range(0, num_tests, batch_size):
-      x_part0 = x0[i : i + batch_size]
-      x_part1 = x1[i : i + batch_size]
-      y_part = self.sess.run(self.y_tensor,
-        feed_dict={self.x0_tensor: x_part0, self.x1_tensor: x_part1})
-      y[i : i + batch_size] = y_part
-    return y
+      x0_part = x0[i : i + batch_size]
+      x1_part = x1[i : i + batch_size]
+      y0_part, y1_part = self.sess.run(self.y_tensors,
+        feed_dict={self.x0_tensor: x0_part, self.x1_tensor: x1_part})
+      y0[i : i + batch_size] = y0_part
+      y1[i : i + batch_size] = y1_part
+    return y0, y1
 
 def verify(result, ans):
   num_tests = ans.shape[0]
@@ -183,8 +194,9 @@ def verify(result, ans):
     a = np.argmax(ans[i])
     r = np.argmax(result[i])
     if (a != r) : error += 1
+
   if (error == 0) : print('PASSED')
-  else : print('FAILURE')
+  else            : print('FAILURE')
 
 def example(img_format):
   num_classes, img_shape, train, test = get_data(img_format)
@@ -201,26 +213,28 @@ def example(img_format):
   helper.print_ascii(test.x1[0], img_h, img_w)
   x_test = [test.x0, test.x1]
   t0 = time.time()
-  y_keras = model.predict(x_test)
+  y0_keras, y1_keras = model.predict(x_test)
   t1 = time.time()
-  print('Keras predict result:', np.argmax(y_keras[0]),
+  print('Keras predict result:', np.argmax(y0_keras[0]), np.argmax(y1_keras[0]),
     '\nKeras time:', t1 - t0)
 
   frozen_graph = FrozenGraph(model, img_shape)
 
   tf_engine = TfEngine(frozen_graph)
   t0 = time.time()
-  y_tf = tf_engine.infer(test.x0, test.x1)
+  y0_tf, y1_tf = tf_engine.infer(test.x0, test.x1)
   t1 = time.time()
   print('Tensorflow time:', t1 - t0)
-  verify(y_tf, y_keras)  
+  verify(y0_tf, y0_keras)
+  verify(y1_tf, y1_keras)
 
   tftrt_engine = TftrtEngine(frozen_graph, 1000, 'FP32')
   t0 = time.time()
-  y_tftrt = tftrt_engine.infer(test.x0, test.x1)
+  y0_tftrt, y1_tftrt = tftrt_engine.infer(test.x0, test.x1)
   t1 = time.time()
   print('TFTRT time', t1 - t0)
-  verify(y_tftrt, y_keras)  
+  verify(y0_tftrt, y0_keras)
+  verify(y1_tftrt, y1_keras)
 
 def main():
   parser = OptionParser()

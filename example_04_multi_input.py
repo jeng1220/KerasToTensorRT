@@ -84,9 +84,20 @@ def custom_model(img_shape, num_classes):
   x2 = Conv2D(32, kernel_size=(3, 3), 
     activation='relu')(x2)
   x2 = MaxPooling2D(pool_size=(2, 2))(x2)
+
+  x3 = Conv2D(64, kernel_size=(3, 3), 
+    activation='relu')(x2)
+  x3 = MaxPooling2D(pool_size=(2, 2))(x3)
+  x3 = Conv2D(128, kernel_size=(3, 3), 
+    activation='relu')(x3)
+  x3 = MaxPooling2D(pool_size=(2, 2))(x3)
+  x3 = Conv2D(256, kernel_size=(3, 3), 
+    activation='relu')(x3)
+  x3 = Flatten()(x3)
+  output_b = Dense(*y_shape1, activation='softmax', name='output_b')(x3)
+
   x2 = Flatten()(x2)
-  output_a = Dense(*y_shape0, activation='softmax', name='output_a')(x2)
-  output_b = Dense(*y_shape1, activation='softmax', name='output_b')(x2)
+  output_a = Dense(*y_shape0, activation='softmax', name='output_a')(x2)  
 
   model = Model(inputs=[input_a, input_b], outputs=[output_a, output_b])
   model.compile(loss=keras.losses.categorical_crossentropy,
@@ -98,7 +109,7 @@ def custom_model(img_shape, num_classes):
 def get_keras_model(num_classes, img_shape, train, test):
   model = custom_model(img_shape, num_classes)
   batch_size = 1000
-  epochs = 1
+  epochs = 12
   
   x_train = [train.x0, train.x1]
   x_test = [test.x0, test.x1]

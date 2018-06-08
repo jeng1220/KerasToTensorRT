@@ -95,7 +95,7 @@ def main():
 
   # load mnist dataset
   x_test, y_test = data.get_test_dataset()
-  batch_size = x_test.shape[0]
+  batch_size = 1000
   img_h = x_test.shape[1]
   img_w = x_test.shape[2]
   helper.print_ascii(x_test[0], img_h, img_w)

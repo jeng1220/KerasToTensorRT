@@ -37,5 +37,5 @@ $ python3 example_03_resnet50.py
 
 [example_04_multi_io.py](/example_04_multi_io.py) shows how to run a multi-input/output Keras model on Tensorflow 1.7 with TensorRT
 ```shell
-$ python3 example_04_multi_input.py
+$ python3 example_04_multi_io.py
 ```

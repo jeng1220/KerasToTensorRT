@@ -1,6 +1,7 @@
 import keras
 from keras.applications.resnet50 import ResNet50
 from keras import backend as K
+import copy
 import os
 import time
 
@@ -23,7 +24,7 @@ class FrozenGraph(object):
 
     self.x_name = [x_name]
     self.y_name = [y_name]
-    self.frozen = graph0  
+    self.frozen = graph1 
 
 class TfEngine(object):
   def __init__(self, graph):
@@ -55,8 +56,9 @@ class TftrtEngine(TfEngine):
       precision_mode=precision,
       minimum_segment_size=2)
 
-    graph.frozen = tftrt_graph
-    super(TftrtEngine, self).__init__(graph)
+    opt_graph = copy.deepcopy(graph)
+    opt_graph.frozen = tftrt_graph
+    super(TftrtEngine, self).__init__(opt_graph)
     self.batch_size = batch_size
 
   def infer(self, x):

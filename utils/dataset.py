@@ -26,7 +26,7 @@ def verify(predict, ans):
     p = np.argmax(predict[i])
     if (p == a) : passed = passed + 1
 
-  if (passed / num_test > 0.99) : print('PASSED')
+  if (float(passed) / num_test > 0.99) : print('PASSED')
   else : print('FAILURE', passed)
 
   p = np.argmax(predict[0])

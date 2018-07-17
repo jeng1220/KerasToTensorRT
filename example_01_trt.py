@@ -1,19 +1,19 @@
 import keras
 from keras.models import load_model
-from keras import backend as K
-
-import tensorflow as tf
-import uff
-import tensorrt as trt
-from tensorrt.parsers import uffparser
-import pycuda.driver as cuda
+import keras.backend as K
 import numpy as np
+import pycuda.autoinit
+import pycuda.driver as cuda
+import tensorflow as tf
+import tensorrt as trt
+import tensorrt.parsers.uffparser as uffparser
 import time
-
+import uff
 import utils.ascii as helper
 import utils.dataset as data
+from pdb import set_trace
 
-class trt_engine():
+class TRTEngine():
   def __init__(self, model, batch_size):
     # get Tensorflow graph object from Keras
     with K.get_session() as sess:
@@ -47,11 +47,13 @@ class trt_engine():
 
     # allocate needed device buffers
     dims = engine.get_binding_dimensions(0).to_DimsCHW()
-    nbytes = batch_size * dims.C() * dims.H() * dims.W() * 4
+    nbytes = batch_size * dims.C() * dims.H() * dims.W() * np.dtype(np.float32).itemsize
     self.d_src  = cuda.mem_alloc(nbytes)
+
     dims = engine.get_binding_dimensions(1).to_DimsCHW()
-    nbytes = batch_size * dims.C() * dims.H() * dims.W() * 4
+    nbytes = batch_size * dims.C() * dims.H() * dims.W() * np.dtype(np.float32).itemsize
     self.d_dst  = cuda.mem_alloc(nbytes)
+
     self.engine = engine
     self.ctx    = engine.create_execution_context()
     self.batch_size = batch_size
@@ -66,7 +68,9 @@ class trt_engine():
     batch_size = self.batch_size
     num_test = x.shape[0]
     dims = self.engine.get_binding_dimensions(1).to_DimsCHW()
-    y = np.empty((num_test, dims.C()), np.float32)
+    output_size = dims.C() * dims.H() * dims.W()
+
+    y = np.empty((num_test, output_size), np.float32)    
 
     bindings = [int(self.d_src), int(self.d_dst)]
     # do inference
@@ -80,6 +84,7 @@ class trt_engine():
     return y
 
 def main():
+
   # load pre-trained model
   K.set_image_data_format('channels_first')
   model = load_model("nchw_model.h5")
@@ -99,7 +104,7 @@ def main():
   data.verify(y_keras, y_test)
 
   # use TensorRT to infer
-  engine = trt_engine(model, 1000)
+  engine = TRTEngine(model, 1000)
 
   t0 = time.time()
   y_trt = engine.infer(x_test)

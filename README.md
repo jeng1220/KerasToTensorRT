@@ -1,7 +1,7 @@
 # Keras to TensorRT Examples #
 This is a simple demonstration for running Keras model model on **Tensorflow with TensorRT integration**(TFTRT) or on TensorRT directly without invoking ["freeze_graph.py"](https://github.com/tensorflow/tensorflow/blob/master/tensorflow/python/tools/freeze_graph.py).
 
-Note: Recommends that uses NVIDIA Tensorflow docker images to run these examples. You can download the images from [NVIDIA NGC](https://www.nvidia.com/en-us/gpu-cloud/).
+Note: Recommend that use NVIDIA Tensorflow docker image to run these examples. You can download the images from [NVIDIA NGC](https://www.nvidia.com/en-us/gpu-cloud/).
 
 ## Requirement ##
 * Python (both 2 and 3 are ok)

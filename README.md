@@ -1,41 +1,51 @@
 # Keras to TensorRT Examples #
-This repo shows how to run Keras model on TensorRT
+This is a simple demonstration for running Keras model model on **Tensorflow with TensorRT integration**(TFTRT) or on TensorRT directly without invoking ["freeze_graph.py"](https://github.com/tensorflow/tensorflow/blob/master/tensorflow/python/tools/freeze_graph.py).
+
+Note: Recommends that uses NVIDIA Tensorflow docker images to run these examples. You can download the images from [NVIDIA NGC](https://www.nvidia.com/en-us/gpu-cloud/).
 
 ## Requirement ##
 * Python (both 2 and 3 are ok)
-* Pycuda (> 2017.1.1)
 * TensorRT (> 3.0)
-* [Tensorflow 1.7 with TensorRT integration](https://devblogs.nvidia.com/tensorrt-integration-speeds-tensorflow-inference/)
+* Tensorflow with TensorRT integration (> 1.7)
 * Keras
 
-Please make sure that Tensorflow has enabled TensorRT support before run examples
+if you want to run model on TensorRT directly, Pycuda is also needed:
+* Pycuda (> 2017.1.1)
 
 ## Examples ##
-[example_00_get_model.py](/example_00_get_model.py) can generate needed Keras models with two different input formats, 
-one for NCHW foramt, another one for NHWC format.
-This is an optional, the needed models were already provided in repo.
+[tftrt_example.py](/tftrt_example.py) demonstrates how to run Keras model on TFTRT. This approach supports both NCHW and NHWC format because Tensorflow can handles format issue.
 ```shell
-$ python example_00_get_model.py -h # type this command to see detail info
+$ python tftrt_example.py
 ```
 
-[example_01_trt.py](/example_01_trt.py) shows how to run Keras model on TensorRT which can achieve fastest speed.
+[tftrt_resnet_example.py](/tftrt_resnet_example.py) demonstrates how to run Keras Applications ResNet50 on TFTRT.
+```shell
+$ python tftrt_resnet_example.py
+```
+
+[tftrt_multi_inputs_mutli_outputs_example.py](/tftrt_multi_inputs_mutli_outputs_example.py) demonstrates how to run a multi-input/output Keras model on TFTRT.
+```shell
+$ python tftrt_multi_inputs_mutli_outputs_example.py
+```
+
+[trt_example.py](/trt_example.py) demonstrates how to run Keras model on TensorRT which can achieve fastest speed.
 Because TensorRT didn't fully support NHWC yet, this approach only suits NCHW format.
 ```shell
-$ python example_01_trt.py
+$ python trt_example.py
 ```
 
-[example_02_tftrt.py](/example_02_tftrt.py) shows how to run Keras model on Tensorflow 1.7 with TensorRT integration.
-This approach supports both NCHW and NHWC format because Tensorflow can handles format issue.
+## Appendix ##
+
+[get_mnist_model.py](/get_mnist_model.py) can generate needed Keras models with two different input formats, 
+one for NCHW foramt, another one for NHWC format.
+
+Note: the needed models were already provided in repo.
 ```shell
-$ python example_02_tftrt.py
+$ python get_mnist_model.py -h # shows help message
+$ python get_mnist_model.py -f 0 # generates model for NCHW format
+$ python get_mnist_model.py -f 1 # generates model for NHWC format
 ```
 
-[example_03_resnet50.py](/example_03_resnet50.py) shows how to run Keras Applications ResNet50 on Tensorflow 1.7 with TensorRT
-```shell
-$ python example_03_resnet50.py
-```
-
-[example_04_multi_io.py](/example_04_multi_io.py) shows how to run a multi-input/output Keras model on Tensorflow 1.7 with TensorRT
-```shell
-$ python example_04_multi_io.py
-```
+## Reference ##
+* [TensorRT Integration Speeds Up TensorFlow Inference](https://devblogs.nvidia.com/tensorrt-integration-speeds-tensorflow-inference/)
+* [NVIDIA Tensorflow Release Note](https://docs.nvidia.com/deeplearning/dgx/tensorflow-release-notes/overview.html#overview)

@@ -13,7 +13,7 @@ import utils.ascii as helper
 import utils.dataset as data
 from pdb import set_trace
 
-class TRTEngine():
+class TrtEngine():
   def __init__(self, model, batch_size):
     # get Tensorflow graph object from Keras
     with K.get_session() as sess:
@@ -104,7 +104,7 @@ def main():
   data.verify(y_keras, y_test)
 
   # use TensorRT to infer
-  engine = TRTEngine(model, 1000)
+  engine = TrtEngine(model, 1000)
 
   t0 = time.time()
   y_trt = engine.infer(x_test)
